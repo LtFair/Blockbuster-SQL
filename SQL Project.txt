@@ -1,0 +1,112 @@
+/* --- QUERY 1 ---
+Examines how much revenue a film produces at different rental pricings to determine the optimal price for each film. This is a simplistic way of viewing this, since the popularity of a film might determines sales more than the price of it. A example of that would be a new movie would likely get more sales immedately after release.*/
+SELECT
+	f.film_id,
+	f.title AS film_name,
+	p.amount AS rental_cost,
+	SUM(p.amount) AS revenue,
+	COUNT(p.amount) AS times_rented
+FROM payment p
+JOIN rental r
+ON p.rental_id = r.rental_id
+JOIN inventory i
+ON i.inventory_id = r.inventory_id
+JOIN film f
+ON f.film_id = i.film_id
+JOIN film_category fc
+ON f.film_id = fc.film_id
+JOIN category c
+ON fc.category_id = c.category_id
+GROUP BY 1,2,3
+ORDER BY 2,3
+
+/* --- QUERY 2 ---
+Determines the overall popularity and revenue of each genre*/
+SELECT
+	c.name AS film_genre,
+	SUM(p.amount) AS revenue,
+	COUNT(p.amount) AS times_rented
+FROM payment p
+JOIN rental r
+ON p.rental_id = r.rental_id
+JOIN inventory i
+ON i.inventory_id = r.inventory_id
+JOIN film f
+ON f.film_id = i.film_id
+JOIN film_category fc
+ON f.film_id = fc.film_id
+JOIN category c
+ON fc.category_id = c.category_id
+GROUP BY 1
+ORDER BY 2 DESC /*order by 3 instead if interested in popularity*/
+
+/* --- QUERY 3 ---
+Finds a list of films that are best sellers based on if their total sales are within the fourth quartile for each genre.*/
+WITH table2 AS (
+	SELECT
+		f.title AS film_title,
+		c.name AS film_genre,
+		NTILE(4) OVER (PARTITION BY c.name ORDER BY SUM(p.amount)) AS revenue_quartile
+	FROM payment p
+	JOIN rental r
+	ON p.rental_id = r.rental_id
+	JOIN inventory i
+	ON i.inventory_id = r.inventory_id
+	JOIN film f
+	ON f.film_id = i.film_id
+	JOIN film_category fc
+	ON f.film_id = fc.film_id
+	JOIN category c
+	ON fc.category_id = c.category_id
+	GROUP BY 1,2
+)
+
+SELECT
+	film_title,
+	film_genre
+FROM table2
+WHERE revenue_quartile > 3
+ORDER BY 2,1
+
+/* --- QUERY 4 ---
+Returns the most purchased category names for each customer, showing which categories each customer likes the most. This could help specialize ads for each customer based on their interests, which could be sent out via email (since this is not a online streaming plateform but appears to be a blockbuster of some kind).*/
+WITH table3 AS(
+	SELECT
+		c.customer_id,
+		CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+		cg.name AS category_name,
+		c.email,
+		COUNT(cg.name) AS genre_popularity
+	FROM customer c
+	JOIN payment p
+	ON p.customer_id = c.customer_id
+	JOIN rental r
+	ON p.rental_id = r.rental_id
+	JOIN inventory i
+	ON i.inventory_id = r.inventory_id
+	JOIN film f
+	ON f.film_id = i.film_id
+	JOIN film_category fc
+	ON f.film_id = fc.film_id
+	JOIN category cg
+	ON fc.category_id = cg.category_id
+	GROUP BY 1,2,3,4
+)
+,table4 AS (
+	SELECT
+		customer_id AS cit4,
+		customer_name AS cnt4,
+		MAX(genre_popularity)
+	FROM table3
+	GROUP BY 1,2
+)
+
+SELECT
+	customer_id,
+	customer_name,
+	email,
+	category_name
+FROM table3
+JOIN table4
+ON table3.customer_id = table4.cit4 AND table3.genre_popularity = table4.max
+ORDER BY 1,3
